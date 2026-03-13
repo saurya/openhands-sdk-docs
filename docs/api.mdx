@@ -1,0 +1,967 @@
+---
+title: API Reference
+description: 'Complete API documentation for the OpenHands SDK'
+---
+
+## Overview
+
+This reference documents the main APIs of the OpenHands SDK. All classes and functions are exported from the `openhands.sdk` package.
+
+<Note>
+  The SDK follows PEP 484 type hints throughout. Use a type checker like pyright for the best development experience.
+</Note>
+
+## Core Classes
+
+### Agent
+
+**Location**: `openhands-sdk/openhands/sdk/agent/agent.py`
+
+The main agent class that orchestrates task execution.
+
+```python
+from openhands.sdk import Agent
+
+agent = Agent(
+    llm: LLM,
+    tools: list[Tool] = [],
+    system_message: str | None = None,
+    skills: list[Skill] = [],
+    plugins: list[Plugin] = [],
+    hooks: list[Hook] = [],
+    context: AgentContext | None = None,
+    security_policy: SecurityPolicy | None = None,
+)
+```
+
+#### Parameters
+
+<ParamField path="llm" type="LLM" required>
+  The language model to use for agent reasoning
+</ParamField>
+
+<ParamField path="tools" type="list[Tool]" default="[]">
+  List of tools available to the agent
+</ParamField>
+
+<ParamField path="system_message" type="str | None" default="None">
+  Instructions defining the agent's role and behavior
+</ParamField>
+
+<ParamField path="skills" type="list[Skill]" default="[]">
+  Additional context and instructions loaded from skill files
+</ParamField>
+
+<ParamField path="plugins" type="list[Plugin]" default="[]">
+  Plugins that extend agent behavior
+</ParamField>
+
+<ParamField path="hooks" type="list[Hook]" default="[]">
+  Hooks for intercepting and modifying agent behavior
+</ParamField>
+
+<ParamField path="context" type="AgentContext | None" default="None">
+  Custom context manager for conversation history
+</ParamField>
+
+<ParamField path="security_policy" type="SecurityPolicy | None" default="None">
+  Security policy restricting agent actions
+</ParamField>
+
+#### Methods
+
+<ResponseField name="process_action" type="(action: Action) -> Observation">
+  Process an action and return an observation. Internal method used by the agent loop.
+</ResponseField>
+
+<ResponseField name="reset" type="() -> None">
+  Reset the agent's internal state
+</ResponseField>
+
+#### Example
+
+```python
+from openhands.sdk import Agent, LLM, Tool
+from openhands.tools.file_editor import FileEditorTool
+
+agent = Agent(
+    llm=LLM(model="anthropic/claude-sonnet-4-5-20250929"),
+    tools=[Tool(name=FileEditorTool.name)],
+    system_message="You are a helpful coding assistant.",
+)
+```
+
+---
+
+### LLM
+
+**Location**: `openhands-sdk/openhands/sdk/llm/llm.py`
+
+Language model interface supporting 100+ providers via LiteLLM.
+
+```python
+from openhands.sdk import LLM
+
+llm = LLM(
+    model: str,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    streaming: bool = False,
+    temperature: float = 0.0,
+    max_tokens: int | None = None,
+    timeout: float = 600.0,
+    fallback_strategy: FallbackStrategy | None = None,
+    fallback_models: list[str] = [],
+    token_callback: TokenCallbackType | None = None,
+    **kwargs,
+)
+```
+
+#### Parameters
+
+<ParamField path="model" type="str" required>
+  Model identifier in format `provider/model-name` (e.g., `anthropic/claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<ParamField path="api_key" type="str | None" default="None">
+  API key for the provider. Falls back to environment variables if not provided.
+</ParamField>
+
+<ParamField path="base_url" type="str | None" default="None">
+  Custom base URL for API requests (useful for proxies or self-hosted models)
+</ParamField>
+
+<ParamField path="streaming" type="bool" default="False">
+  Enable streaming responses
+</ParamField>
+
+<ParamField path="temperature" type="float" default="0.0">
+  Sampling temperature (0.0 = deterministic, higher = more random)
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum tokens in response
+</ParamField>
+
+<ParamField path="timeout" type="float" default="600.0">
+  Request timeout in seconds
+</ParamField>
+
+<ParamField path="fallback_strategy" type="FallbackStrategy | None" default="None">
+  Strategy for handling failures (FALLBACK_ON_ERROR, FALLBACK_ON_CONTEXT_LENGTH, etc.)
+</ParamField>
+
+<ParamField path="fallback_models" type="list[str]" default="[]">
+  Alternative models to try if primary fails
+</ParamField>
+
+<ParamField path="token_callback" type="TokenCallbackType | None" default="None">
+  Callback function called for each token when streaming
+</ParamField>
+
+#### Methods
+
+<ResponseField name="chat" type="(messages: list[Message], **kwargs) -> Message">
+  Send messages and get a response
+</ResponseField>
+
+<ResponseField name="stream" type="(messages: list[Message], **kwargs) -> Iterator[LLMStreamChunk]">
+  Stream response tokens
+</ResponseField>
+
+<ResponseField name="get_metrics" type="() -> dict">
+  Get usage metrics (tokens, cost, latency)
+</ResponseField>
+
+#### Example
+
+```python
+from openhands.sdk import LLM, Message, TextContent
+
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    temperature=0.7,
+    max_tokens=4096,
+)
+
+messages = [
+    Message(role="user", content=[TextContent(text="Hello!")])
+]
+
+response = llm.chat(messages)
+print(response.content[0].text)
+```
+
+---
+
+### Conversation
+
+**Location**: `openhands-sdk/openhands/sdk/conversation/conversation.py`
+
+Main interface for agent interactions. Automatically selects LocalConversation or RemoteConversation.
+
+```python
+from openhands.sdk import Conversation
+
+conversation = Conversation(
+    agent: Agent,
+    workspace: str | Workspace,
+    server_url: str | None = None,
+    confirmation_mode: bool = False,
+    confirmation_callback: Callable | None = None,
+    visualizer: ConversationVisualizerBase | None = None,
+    max_iterations: int | None = None,
+    max_tokens: int | None = None,
+)
+```
+
+#### Parameters
+
+<ParamField path="agent" type="Agent" required>
+  The agent to use for the conversation
+</ParamField>
+
+<ParamField path="workspace" type="str | Workspace" required>
+  Path to workspace directory or Workspace instance
+</ParamField>
+
+<ParamField path="server_url" type="str | None" default="None">
+  If provided, uses RemoteConversation; otherwise uses LocalConversation
+</ParamField>
+
+<ParamField path="confirmation_mode" type="bool" default="False">
+  If True, agent requests permission before executing actions
+</ParamField>
+
+<ParamField path="confirmation_callback" type="Callable | None" default="None">
+  Function called to confirm actions: `(action: Action) -> bool`
+</ParamField>
+
+<ParamField path="visualizer" type="ConversationVisualizerBase | None" default="None">
+  Custom visualizer for displaying agent progress
+</ParamField>
+
+<ParamField path="max_iterations" type="int | None" default="None">
+  Maximum reasoning-action iterations
+</ParamField>
+
+<ParamField path="max_tokens" type="int | None" default="None">
+  Maximum total tokens before stopping
+</ParamField>
+
+#### Methods
+
+<ResponseField name="send_message" type="(message: str, images: list[str] = []) -> None">
+  Send a message to the agent
+  
+  **Parameters:**
+  - `message`: Text message
+  - `images`: Optional list of base64-encoded images
+</ResponseField>
+
+<ResponseField name="run" type="(max_iterations: int | None = None) -> None">
+  Run the agent until task completion or max_iterations reached
+  
+  **Parameters:**
+  - `max_iterations`: Override default max iterations for this run
+</ResponseField>
+
+<ResponseField name="run_async" type="async (max_iterations: int | None = None) -> None">
+  Async version of run()
+</ResponseField>
+
+<ResponseField name="get_final_response" type="() -> str">
+  Get the agent's final text response
+</ResponseField>
+
+<ResponseField name="pause" type="() -> None">
+  Pause the agent execution
+</ResponseField>
+
+<ResponseField name="resume" type="() -> None">
+  Resume paused execution
+</ResponseField>
+
+<ResponseField name="stop" type="() -> None">
+  Stop the agent execution
+</ResponseField>
+
+<ResponseField name="save_state" type="() -> dict">
+  Serialize conversation state for persistence
+</ResponseField>
+
+<ResponseField name="restore_state" type="classmethod (state: dict, agent: Agent, workspace: Workspace) -> Conversation">
+  Restore conversation from saved state
+</ResponseField>
+
+#### Properties
+
+<ResponseField name="status" type="ConversationExecutionStatus">
+  Current execution status (IDLE, RUNNING, PAUSED, STOPPED, COMPLETED)
+</ResponseField>
+
+<ResponseField name="stats" type="ConversationStats">
+  Statistics including token usage, cost, and latency
+</ResponseField>
+
+<ResponseField name="event_log" type="EventLog">
+  Log of all events (actions and observations)
+</ResponseField>
+
+#### Example
+
+```python
+from openhands.sdk import Conversation, Agent, LLM
+
+agent = Agent(llm=LLM(model="anthropic/claude-sonnet-4-5-20250929"))
+conversation = Conversation(agent=agent, workspace="/path/to/project")
+
+conversation.send_message("Analyze this code and suggest improvements")
+conversation.run()
+
+print(conversation.get_final_response())
+print(f"Used {conversation.stats.total_tokens} tokens")
+```
+
+---
+
+### Tool
+
+**Location**: `openhands-sdk/openhands/sdk/tool/tool.py`
+
+Tool definition and registration.
+
+```python
+from openhands.sdk import Tool
+
+tool = Tool(
+    name: str,
+    config: dict = {},
+)
+```
+
+#### Parameters
+
+<ParamField path="name" type="str" required>
+  Name of the registered tool (e.g., `"terminal"`, `"file_editor"`)
+</ParamField>
+
+<ParamField path="config" type="dict" default="{}">
+  Tool-specific configuration options
+</ParamField>
+
+#### Creating Custom Tools
+
+```python
+from openhands.sdk import register_tool, Action, Observation, ToolExecutor
+from pydantic import Field
+
+class MyAction(Action):
+    name: str = "my_tool"
+    param: str = Field(description="Description for LLM")
+
+class MyObservation(Observation):
+    result: str
+
+class MyExecutor(ToolExecutor[MyAction, MyObservation]):
+    def __call__(self, action: MyAction, conversation=None) -> MyObservation:
+        # Implementation
+        return MyObservation(result=f"Processed: {action.param}")
+
+@register_tool(name="my_tool")
+class MyTool:
+    executor = MyExecutor()
+```
+
+#### Tool Registration Functions
+
+<ResponseField name="register_tool" type="(name: str) -> Callable">
+  Decorator to register a custom tool
+  
+  **Parameters:**
+  - `name`: Unique tool name
+</ResponseField>
+
+<ResponseField name="resolve_tool" type="(name: str) -> ToolDefinition">
+  Get tool definition by name
+  
+  **Parameters:**
+  - `name`: Tool name
+  
+  **Returns:** ToolDefinition instance
+</ResponseField>
+
+<ResponseField name="list_registered_tools" type="() -> list[str]">
+  Get list of all registered tool names
+</ResponseField>
+
+---
+
+### Action & Observation
+
+**Location**: `openhands-sdk/openhands/sdk/tool/` and `openhands-sdk/openhands/sdk/event/`
+
+Base classes for tool actions and observations.
+
+#### Action
+
+```python
+from openhands.sdk import Action
+from pydantic import Field
+
+class MyAction(Action):
+    name: str = "tool_name"
+    parameter: str = Field(description="Description shown to LLM")
+```
+
+Actions represent what the agent wants to do. They must:
+- Inherit from `Action`
+- Set `name` class attribute
+- Use Pydantic `Field` with descriptions for LLM
+
+#### Observation
+
+```python
+from openhands.sdk import Observation
+from openhands.sdk.llm import TextContent, ImageContent
+
+class MyObservation(Observation):
+    data: str
+    
+    @property
+    def to_llm_content(self) -> list[TextContent | ImageContent]:
+        """Convert observation to LLM-readable format."""
+        return [TextContent(text=self.data)]
+```
+
+Observations represent results. They must:
+- Inherit from `Observation`
+- Implement `to_llm_content` property
+- Return list of TextContent or ImageContent
+
+---
+
+## Message & Content Types
+
+**Location**: `openhands-sdk/openhands/sdk/llm/message.py`
+
+### Message
+
+```python
+from openhands.sdk import Message, TextContent, ImageContent
+
+message = Message(
+    role: str,
+    content: list[TextContent | ImageContent],
+)
+```
+
+<ParamField path="role" type="str" required>
+  Message role: "user", "assistant", or "system"
+</ParamField>
+
+<ParamField path="content" type="list[TextContent | ImageContent]" required>
+  Message content (can be mixed text and images)
+</ParamField>
+
+### TextContent
+
+```python
+from openhands.sdk import TextContent
+
+content = TextContent(text="Hello, world!")
+```
+
+### ImageContent
+
+```python
+from openhands.sdk import ImageContent
+
+content = ImageContent(
+    image="base64_encoded_image_data",
+    detail="high",  # or "low", "auto"
+)
+```
+
+---
+
+## Workspace
+
+**Location**: `openhands-sdk/openhands/sdk/workspace/`
+
+### LocalWorkspace
+
+**Location**: `openhands-sdk/openhands/sdk/workspace/local_workspace.py`
+
+```python
+from openhands.sdk import LocalWorkspace
+
+workspace = LocalWorkspace(path: str)
+```
+
+<ParamField path="path" type="str" required>
+  Path to local directory
+</ParamField>
+
+### RemoteWorkspace
+
+**Location**: `openhands-sdk/openhands/sdk/workspace/remote_workspace.py`
+
+```python
+from openhands.sdk import RemoteWorkspace
+
+workspace = RemoteWorkspace(
+    server_url: str,
+    workspace_id: str,
+)
+```
+
+<ParamField path="server_url" type="str" required>
+  URL of agent server
+</ParamField>
+
+<ParamField path="workspace_id" type="str" required>
+  Unique workspace identifier
+</ParamField>
+
+---
+
+## Context & Memory
+
+**Location**: `openhands-sdk/openhands/sdk/context/`
+
+### AgentContext
+
+```python
+from openhands.sdk import AgentContext
+
+context = AgentContext(
+    max_history_length: int = 100,
+    condensing_strategy: CondenserBase | None = None,
+)
+```
+
+<ParamField path="max_history_length" type="int" default="100">
+  Maximum events to keep in memory
+</ParamField>
+
+<ParamField path="condensing_strategy" type="CondenserBase | None" default="None">
+  Strategy for condensing old context (e.g., LLMSummarizingCondenser)
+</ParamField>
+
+### LLMSummarizingCondenser
+
+**Location**: `openhands-sdk/openhands/sdk/context/condenser.py`
+
+```python
+from openhands.sdk import LLMSummarizingCondenser
+
+condenser = LLMSummarizingCondenser(
+    llm: LLM,
+    target_size: int = 5000,
+)
+```
+
+<ParamField path="llm" type="LLM" required>
+  LLM to use for summarization
+</ParamField>
+
+<ParamField path="target_size" type="int" default="5000">
+  Target size in tokens after condensing
+</ParamField>
+
+---
+
+## Skills & Plugins
+
+### Skills
+
+**Location**: `openhands-sdk/openhands/sdk/skills/`
+
+```python
+from openhands.sdk import (
+    load_project_skills,
+    load_user_skills,
+    load_skills_from_dir,
+)
+
+# Load from .openhands_skills/ in current directory
+project_skills = load_project_skills()
+
+# Load from ~/.openhands/skills/
+user_skills = load_user_skills()
+
+# Load from custom directory
+custom_skills = load_skills_from_dir("/path/to/skills")
+```
+
+### Plugin
+
+**Location**: `openhands-sdk/openhands/sdk/plugin/`
+
+```python
+from openhands.sdk import Plugin
+
+class MyPlugin(Plugin):
+    def on_init(self, agent: Agent) -> None:
+        """Called when agent is initialized."""
+        pass
+    
+    def on_action(self, action: Action) -> Action:
+        """Called before action execution."""
+        return action
+    
+    def on_observation(self, observation: Observation) -> Observation:
+        """Called after observation received."""
+        return observation
+    
+    def on_message(self, message: Message) -> Message:
+        """Called for each message."""
+        return message
+```
+
+---
+
+## Sub-Agents
+
+**Location**: `openhands-sdk/openhands/sdk/subagent/`
+
+```python
+from openhands.sdk import (
+    register_agent,
+    load_project_agents,
+    load_user_agents,
+    load_agents_from_dir,
+)
+
+# Register agent factory
+@register_agent(name="specialist")
+def create_specialist(llm: LLM) -> Agent:
+    return Agent(
+        llm=llm,
+        system_message="You are a specialist.",
+        tools=[...],
+    )
+
+# Load from .openhands_agents/ directory
+project_agents = load_project_agents()
+
+# Load from ~/.openhands/agents/
+user_agents = load_user_agents()
+
+# Load from custom directory
+custom_agents = load_agents_from_dir("/path/to/agents")
+```
+
+---
+
+## MCP Integration
+
+**Location**: `openhands-sdk/openhands/sdk/mcp/`
+
+### MCPClient
+
+```python
+from openhands.sdk import MCPClient
+
+client = MCPClient(
+    command: str,
+    args: list[str] = [],
+    env: dict[str, str] = {},
+)
+```
+
+<ParamField path="command" type="str" required>
+  Command to start MCP server (e.g., "npx")
+</ParamField>
+
+<ParamField path="args" type="list[str]" default="[]">
+  Arguments for the command
+</ParamField>
+
+<ParamField path="env" type="dict[str, str]" default="{}">
+  Environment variables for the MCP server process
+</ParamField>
+
+### create_mcp_tools
+
+```python
+from openhands.sdk import create_mcp_tools, MCPClient
+
+client = MCPClient(command="npx", args=["-y", "@modelcontextprotocol/server-github"])
+tools = create_mcp_tools(client)
+
+# Use in agent
+agent = Agent(llm=llm, tools=tools)
+```
+
+---
+
+## Events
+
+**Location**: `openhands-sdk/openhands/sdk/event/`
+
+### Event
+
+Base class for all events.
+
+```python
+from openhands.sdk import Event
+
+class MyEvent(Event):
+    timestamp: float
+    # Additional fields
+```
+
+### Common Event Types
+
+<CardGroup cols={2}>
+  <Card title="MessageEvent" icon="message">
+    User or agent text message
+    
+    **Location**: `openhands-sdk/openhands/sdk/event/llm_convertible.py`
+  </Card>
+  
+  <Card title="Action" icon="play">
+    Agent action (tool invocation)
+    
+    **Location**: `openhands-sdk/openhands/sdk/tool/action.py`
+  </Card>
+  
+  <Card title="Observation" icon="eye">
+    Action result
+    
+    **Location**: `openhands-sdk/openhands/sdk/tool/observation.py`
+  </Card>
+  
+  <Card title="HookExecutionEvent" icon="hook">
+    Hook was triggered
+    
+    **Location**: `openhands-sdk/openhands/sdk/event/hook_execution.py`
+  </Card>
+</CardGroup>
+
+### EventLog
+
+```python
+from openhands.sdk.conversation import EventLog
+
+# Access from conversation
+events = conversation.event_log.events
+
+for event in events:
+    print(f"{event.timestamp}: {event.__class__.__name__}")
+```
+
+---
+
+## Enums & Constants
+
+### ConversationExecutionStatus
+
+**Location**: `openhands-sdk/openhands/sdk/conversation/state.py`
+
+```python
+from openhands.sdk import ConversationExecutionStatus
+
+# Possible values:
+# - IDLE: Waiting for user input
+# - RUNNING: Agent is processing
+# - PAUSED: Execution paused
+# - STOPPED: Stopped by user or error
+# - COMPLETED: Task completed
+```
+
+### FallbackStrategy
+
+**Location**: `openhands-sdk/openhands/sdk/llm/llm.py`
+
+```python
+from openhands.sdk import FallbackStrategy
+
+# Possible values:
+# - FALLBACK_ON_ERROR: Fallback on any error
+# - FALLBACK_ON_CONTEXT_LENGTH: Fallback on context length errors
+# - FALLBACK_ON_RATE_LIMIT: Fallback on rate limit errors
+```
+
+---
+
+## Utilities
+
+### Logging
+
+**Location**: `openhands-sdk/openhands/sdk/logger/`
+
+```python
+from openhands.sdk import get_logger
+
+logger = get_logger(__name__)
+
+logger.info("Agent started")
+logger.warning("Token limit approaching")
+logger.error("Action failed")
+```
+
+### File Store
+
+**Location**: `openhands-sdk/openhands/sdk/io/`
+
+```python
+from openhands.sdk import LocalFileStore
+
+store = LocalFileStore(base_path="/path/to/storage")
+
+# Store data
+store.write("key", b"data")
+
+# Read data
+data = store.read("key")
+
+# List keys
+keys = store.list_keys()
+```
+
+---
+
+## Type Aliases
+
+Common type aliases used throughout the SDK:
+
+```python
+from openhands.sdk import (
+    TokenCallbackType,  # Callable[[LLMStreamChunk], None]
+    ConversationCallbackType,  # Callable[[Event], None]
+)
+```
+
+---
+
+## Security
+
+**Location**: `openhands-sdk/openhands/sdk/security/`
+
+### SecurityPolicy
+
+```python
+from openhands.sdk.security import SecurityPolicy
+
+policy = SecurityPolicy(
+    allow_network: bool = True,
+    allow_file_write: bool = True,
+    allowed_paths: list[str] = [],
+    blocked_commands: list[str] = [],
+)
+
+agent = Agent(llm=llm, tools=tools, security_policy=policy)
+```
+
+---
+
+## Observability
+
+**Location**: `openhands-sdk/openhands/sdk/observability/`
+
+Automatic tracing with Laminar when `LMNR_PROJECT_API_KEY` is set:
+
+```python
+import os
+
+# Enable observability
+os.environ["LMNR_PROJECT_API_KEY"] = "your-key"
+
+# All conversations are automatically traced
+conversation = Conversation(agent=agent, workspace=workspace)
+# Traces visible at https://laminar.run
+```
+
+---
+
+## Complete Example
+
+Putting it all together:
+
+```python
+import os
+from openhands.sdk import (
+    LLM,
+    Agent,
+    Conversation,
+    Tool,
+    load_project_skills,
+    get_logger,
+)
+from openhands.tools.file_editor import FileEditorTool
+from openhands.tools.terminal import TerminalTool
+from openhands.tools.task_tracker import TaskTrackerTool
+
+logger = get_logger(__name__)
+
+# Initialize LLM with fallback
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+    fallback_models=["anthropic/claude-3-opus-20240229"],
+)
+
+# Load project skills
+skills = load_project_skills()
+
+# Create agent
+agent = Agent(
+    llm=llm,
+    tools=[
+        Tool(name=TerminalTool.name),
+        Tool(name=FileEditorTool.name),
+        Tool(name=TaskTrackerTool.name),
+    ],
+    skills=skills,
+    system_message="You are an expert software engineer.",
+)
+
+# Create conversation
+conversation = Conversation(
+    agent=agent,
+    workspace=os.getcwd(),
+    max_iterations=50,
+)
+
+# Execute task
+try:
+    conversation.send_message(
+        "Analyze the codebase and create a comprehensive test suite for untested modules."
+    )
+    conversation.run()
+    
+    # Get results
+    logger.info(f"Task completed: {conversation.get_final_response()}")
+    logger.info(f"Stats: {conversation.stats}")
+    
+except Exception as e:
+    logger.error(f"Task failed: {e}")
+    # Access partial results
+    for event in conversation.event_log.events:
+        logger.debug(f"{event.timestamp}: {event}")
+```
+
+---
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="Type Definitions" icon="code">
+    All classes use Pydantic for validation. Check `openhands-sdk/openhands/sdk/` for complete type definitions.
+  </Card>
+  
+  <Card title="Examples" icon="github" href="https://github.com/OpenHands/software-agent-sdk/tree/main/examples">
+    Browse working examples in the repository
+  </Card>
+  
+  <Card title="Source Code" icon="github" href="https://github.com/OpenHands/software-agent-sdk">
+    View the complete source code
+  </Card>
+  
+  <Card title="Community" icon="slack" href="https://openhands.dev/joinslack">
+    Get help from the community
+  </Card>
+</CardGroup>

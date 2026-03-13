@@ -1,0 +1,392 @@
+---
+title: Setup
+description: 'Install and configure the OpenHands Software Agent SDK'
+---
+
+## Prerequisites
+
+Before installing the OpenHands SDK, ensure you have:
+
+- **Python 3.12 or higher** (Python 3.13 is recommended and tested)
+- **pip** or **uv** package manager
+- An **LLM API key** (OpenAI, Anthropic, or any LiteLLM-supported provider)
+
+<Note>
+  The SDK uses [uv](https://github.com/astral-sh/uv) for development and dependency management. While pip works fine for installation, uv provides faster, more reliable dependency resolution.
+</Note>
+
+## Installation
+
+### Option 1: Install from PyPI (Recommended for Users)
+
+Install the core SDK and tools packages:
+
+```bash
+pip install openhands-sdk openhands-tools
+```
+
+For specific optional dependencies:
+
+```bash
+# AWS S3 support
+pip install openhands-sdk[boto3]
+
+# All optional dependencies
+pip install openhands-sdk[all]
+```
+
+### Option 2: Install from Source (Recommended for Contributors)
+
+Clone the repository and install in development mode:
+
+```bash
+# Clone the repository
+git clone https://github.com/OpenHands/software-agent-sdk.git
+cd software-agent-sdk
+
+# Build and install all packages
+make build
+```
+
+The `make build` command uses `uv` to install all workspace packages and development dependencies.
+
+<Note>
+  The repository uses a monorepo structure with workspace configuration in `pyproject.toml` at the root. All packages (`openhands-sdk`, `openhands-tools`, `openhands-workspace`, `openhands-agent-server`) are developed together.
+</Note>
+
+### Option 3: Install Specific Packages
+
+If you only need specific packages:
+
+```bash
+# Core SDK only
+pip install openhands-sdk
+
+# Tools package
+pip install openhands-tools
+
+# Workspace management
+pip install openhands-workspace
+
+# Agent server
+pip install openhands-agent-server
+```
+
+## Configuration
+
+### Environment Variables
+
+The SDK requires an LLM API key to function. Set one of the following environment variables based on your provider:
+
+```bash
+# For Anthropic Claude models
+export ANTHROPIC_API_KEY="your-api-key-here"
+
+# For OpenAI models
+export OPENAI_API_KEY="your-api-key-here"
+
+# Generic LLM API key (works with most providers via LiteLLM)
+export LLM_API_KEY="your-api-key-here"
+```
+
+<Tip>
+  You can also pass the API key directly when creating an LLM instance in your code, but environment variables are recommended for security.
+</Tip>
+
+### Additional Configuration Options
+
+#### Workspace Configuration
+
+For local workspace usage (default):
+
+```bash
+# Set the default workspace directory
+export OPENHANDS_WORKSPACE_DIR="/path/to/your/workspace"
+```
+
+#### Agent Server Configuration
+
+If using the remote agent server:
+
+```bash
+# Agent server URL
+export OPENHANDS_AGENT_SERVER_URL="http://localhost:8000"
+
+# WebSocket URL
+export OPENHANDS_AGENT_SERVER_WS_URL="ws://localhost:8000"
+```
+
+#### Observability (Optional)
+
+For Laminar observability integration:
+
+```bash
+export LMNR_PROJECT_API_KEY="your-laminar-api-key"
+```
+
+## Verification
+
+Verify your installation by running a simple test:
+
+```python
+import openhands.sdk
+
+print(f"OpenHands SDK version: {openhands.sdk.__version__}")
+```
+
+Or check that the packages are installed:
+
+```bash
+pip list | grep openhands
+```
+
+You should see output similar to:
+
+```
+openhands-sdk              1.13.1
+openhands-tools            1.13.1
+```
+
+## Quick Start
+
+Once installed, create a simple agent:
+
+```python
+import os
+from openhands.sdk import LLM, Agent, Conversation, Tool
+from openhands.tools.terminal import TerminalTool
+
+# Initialize LLM
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+)
+
+# Create an agent
+agent = Agent(
+    llm=llm,
+    tools=[Tool(name=TerminalTool.name)],
+)
+
+# Start a conversation
+conversation = Conversation(
+    agent=agent,
+    workspace=os.getcwd()
+)
+
+conversation.send_message("List the files in this directory")
+conversation.run()
+```
+
+<Check>
+  If this runs without errors and produces output, your installation is complete!
+</Check>
+
+## Development Setup
+
+For contributors and developers working on the SDK itself:
+
+### 1. Clone and Build
+
+```bash
+git clone https://github.com/OpenHands/software-agent-sdk.git
+cd software-agent-sdk
+make build
+```
+
+The build process installs:
+- All workspace packages in editable mode
+- Development dependencies (pytest, ruff, pyright, etc.)
+- Pre-commit hooks
+
+### 2. Run Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run tests for specific packages
+uv run pytest tests/sdk/
+uv run pytest tests/tools/
+uv run pytest tests/agent_server/
+```
+
+### 3. Code Quality Tools
+
+The project uses several tools for code quality:
+
+```bash
+# Format code with ruff
+make format
+
+# Lint code
+make lint
+
+# Run all pre-commit checks
+uv run pre-commit run --all-files
+```
+
+### 4. Pre-commit Hooks
+
+Pre-commit hooks are automatically installed when you run `make build`. They run on every commit and include:
+
+- Code formatting (ruff)
+- Import sorting (ruff)
+- Type checking (pyright)
+- Linting checks
+
+Configuration is in `pyproject.toml`:
+- Ruff: Lines 44-83
+- Pytest: Lines 86-94
+- Pyright: Lines 97-118
+
+## Package Structure
+
+Understanding the package structure helps with both usage and development:
+
+### Core SDK (`openhands-sdk`)
+
+**Location**: `openhands-sdk/openhands/sdk/`
+
+Main modules:
+- `agent/` - Agent implementations (Agent, ACPAgent, etc.)
+- `conversation/` - Conversation management and execution
+- `llm/` - LLM integration with LiteLLM
+- `event/` - Event system for actions and observations
+- `tool/` - Tool registration and execution framework
+- `workspace/` - Workspace abstractions (local, remote)
+- `mcp/` - Model Context Protocol integration
+- `context/` - Agent context and memory management
+- `hooks/` - Hook system for extending agent behavior
+- `skills/` - Skill loading and management
+- `plugin/` - Plugin system
+
+**Dependencies** (from `openhands-sdk/pyproject.toml`):
+- `litellm>=1.80.10` - LLM integration
+- `pydantic>=2.12.5` - Data validation
+- `fastmcp>=3.0.0` - MCP support
+- `websockets>=12` - WebSocket communication
+- `httpx>=0.27.0` - HTTP client
+- And more (see full list in source)
+
+### Tools Package (`openhands-tools`)
+
+**Location**: `openhands-tools/openhands/tools/`
+
+Built-in tools:
+- `file_editor/` - Advanced file editing capabilities
+- `terminal/` - Shell command execution
+- `task_tracker/` - Task management
+- `browser_use/` - Web browsing
+- `delegate/` - Agent delegation
+- `apply_patch/` - Apply code patches
+- `glob/`, `grep/` - File searching
+- And more
+
+### Workspace Package (`openhands-workspace`)
+
+**Location**: `openhands-workspace/`
+
+Manages different workspace environments for agent execution.
+
+### Agent Server (`openhands-agent-server`)
+
+**Location**: `openhands-agent-server/openhands/agent_server/`
+
+REST API server for running agents in isolated environments.
+
+## Troubleshooting
+
+### Import Errors
+
+If you encounter import errors:
+
+```bash
+# Reinstall packages
+pip install --force-reinstall openhands-sdk openhands-tools
+
+# For development
+cd software-agent-sdk
+make build
+```
+
+### LLM Connection Issues
+
+If you get LLM-related errors:
+
+1. Verify your API key is set correctly:
+   ```bash
+   echo $LLM_API_KEY
+   ```
+
+2. Check your model string format (should be `provider/model-name`):
+   ```python
+   # Correct formats
+   model="anthropic/claude-sonnet-4-5-20250929"
+   model="openai/gpt-4"
+   model="azure/gpt-4"
+   ```
+
+3. Ensure you have internet connectivity for API calls
+
+### Workspace Permission Errors
+
+If you encounter permission errors with workspaces:
+
+```bash
+# Ensure the workspace directory is writable
+chmod -R u+w /path/to/workspace
+```
+
+### Development Environment Issues
+
+If tests fail or linting doesn't work:
+
+```bash
+# Clean and rebuild
+rm -rf .venv uv.lock
+make build
+
+# Reinstall pre-commit hooks
+uv run pre-commit install
+```
+
+## Workspace Configuration (UV)
+
+The project uses UV for workspace management. Key configuration in root `pyproject.toml`:
+
+```toml
+[tool.uv.workspace]
+members = ["openhands-sdk", "openhands-tools", "openhands-workspace", "openhands-agent-server"]
+
+[tool.uv.sources]
+openhands-sdk = { workspace = true }
+openhands-tools = { workspace = true }
+openhands-workspace = { workspace = true }
+openhands-agent-server = { workspace = true }
+```
+
+This allows packages to reference each other during development.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/docs/architecture">
+    Learn about core concepts and architecture
+  </Card>
+  <Card title="Usage Examples" icon="code" href="/docs/usage">
+    Explore examples and common patterns
+  </Card>
+  <Card title="API Reference" icon="book" href="/docs/api">
+    Browse the complete API documentation
+  </Card>
+  <Card title="Examples Directory" icon="folder" href="https://github.com/OpenHands/software-agent-sdk/tree/main/examples">
+    View example code in the repository
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- **Makefile Commands**: See `Makefile` in the repository root for available commands
+- **Development Guide**: See `DEVELOPMENT.md` for detailed development instructions
+- **Contributing Guide**: See `CONTRIBUTING.md` for contribution guidelines
