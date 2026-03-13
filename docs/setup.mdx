@@ -1,0 +1,399 @@
+---
+title: "Setup & Installation"
+description: "Get started with the OpenHands Software Agent SDK"
+---
+
+# Setup & Installation
+
+This guide covers installing and configuring the OpenHands Software Agent SDK for development and production use.
+
+## Requirements
+
+- **Python**: 3.12 or higher
+- **Package Manager**: [UV](https://docs.astral.sh/uv/) (recommended) or pip
+- **Operating System**: Linux, macOS, or Windows (with WSL)
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="Using UV (Recommended)">
+    UV is a fast Python package manager that simplifies dependency management.
+
+    ```bash
+    # Install UV if you haven't already
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    # Clone the repository
+    git clone https://github.com/OpenHands/software-agent-sdk.git
+    cd software-agent-sdk
+
+    # Build and install all packages
+    make build
+    ```
+
+    The `make build` command runs:
+    - `uv sync --dev` to install all dependencies
+    - Installs pre-commit hooks for code quality
+  </Tab>
+
+  <Tab title="Using pip">
+    ```bash
+    # Install individual packages from PyPI
+    pip install openhands-sdk
+    pip install openhands-tools
+    pip install openhands-agent-server
+    pip install openhands-workspace
+
+    # Or install all at once
+    pip install openhands-sdk openhands-tools openhands-agent-server openhands-workspace
+    ```
+  </Tab>
+
+  <Tab title="Development Setup">
+    For contributing to the SDK:
+
+    ```bash
+    # Clone the repository
+    git clone https://github.com/OpenHands/software-agent-sdk.git
+    cd software-agent-sdk
+
+    # Build and install with dev dependencies
+    make build
+
+    # Verify installation
+    uv run pytest tests/sdk/ -k test_agent
+    ```
+
+    This installs:
+    - All SDK packages in editable mode
+    - Development dependencies (pytest, ruff, pyright, pre-commit)
+    - Pre-commit hooks for automated checks
+  </Tab>
+</Tabs>
+
+## Environment Configuration
+
+### LLM API Keys
+
+The SDK requires an LLM API key to function. Set one of the following environment variables:
+
+```bash
+# For Anthropic Claude models
+export LLM_API_KEY="your-anthropic-api-key"
+export LLM_MODEL="anthropic/claude-sonnet-4-5-20250929"
+
+# For OpenAI models
+export LLM_API_KEY="your-openai-api-key"
+export LLM_MODEL="gpt-4"
+
+# For custom/local models
+export LLM_API_KEY="your-api-key"
+export LLM_MODEL="your-model-name"
+export LLM_BASE_URL="https://your-api-endpoint.com"
+```
+
+### Agent Server Configuration
+
+If using the Agent Server, additional configuration is available:
+
+```bash
+# Agent Server configuration
+export OPENHANDS_AGENT_SERVER_CONFIG_PATH="workspace/config.json"
+export SESSION_API_KEY="your-session-api-key"  # Optional auth
+export OH_SECRET_KEY=$(openssl rand -hex 32)   # For encrypting secrets
+```
+
+### Optional Environment Variables
+
+```bash
+# Observability (Laminar)
+export LMNR_PROJECT_API_KEY="your-laminar-api-key"
+
+# AWS credentials (for AWS Bedrock models)
+export AWS_ACCESS_KEY_ID="your-aws-access-key"
+export AWS_SECRET_ACCESS_KEY="your-aws-secret-key"
+export AWS_REGION="us-west-2"
+
+# Workspace configuration
+export WORKSPACE_DIR="/path/to/workspace"
+```
+
+## Verify Installation
+
+### Test the SDK
+
+Create a test script `test_sdk.py`:
+
+```python
+import os
+from openhands.sdk import LLM, Agent, Conversation, Tool
+from openhands.tools.file_editor import FileEditorTool
+from openhands.tools.terminal import TerminalTool
+
+# Verify SDK imports
+print(f"SDK imported successfully")
+print(f"Available tools: {Tool}")
+
+# Create a simple agent
+llm = LLM(
+    model=os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4-5-20250929"),
+    api_key=os.getenv("LLM_API_KEY"),
+)
+print(f"LLM configured: {llm.model}")
+
+agent = Agent(
+    llm=llm,
+    tools=[
+        Tool(name=TerminalTool.name),
+        Tool(name=FileEditorTool.name),
+    ],
+)
+print(f"Agent created with {len(agent.tools)} tools")
+print("✓ Setup verified successfully!")
+```
+
+Run the test:
+
+```bash
+python test_sdk.py
+```
+
+### Run Examples
+
+The repository includes comprehensive examples:
+
+```bash
+# Navigate to examples directory
+cd examples/01_standalone_sdk/
+
+# Run the hello world example
+uv run python 01_hello_world.py
+
+# Run custom tools example
+uv run python 02_custom_tools.py
+
+# Browse all examples
+ls -la
+```
+
+## Project Structure
+
+After installation, your project should have this structure:
+
+```
+software-agent-sdk/
+├── openhands-sdk/          # Core SDK package
+│   └── openhands/sdk/      # Agent, LLM, Conversation, Tool
+├── openhands-tools/        # Built-in tools
+│   └── openhands/tools/    # FileEditor, Terminal, Browser, etc.
+├── openhands-workspace/    # Workspace implementations
+│   └── openhands/workspace/# Local, Docker, API workspaces
+├── openhands-agent-server/ # Agent server
+│   └── openhands/agent_server/  # REST/WebSocket API
+├── examples/               # Usage examples
+│   ├── 01_standalone_sdk/  # Basic SDK usage
+│   ├── 02_remote_agent_server/  # Server examples
+│   └── 03_github_workflows/     # CI/CD integration
+├── tests/                  # Test suites
+│   ├── sdk/
+│   ├── tools/
+│   ├── workspace/
+│   └── agent_server/
+├── pyproject.toml          # UV workspace config
+├── uv.lock                 # Locked dependencies
+└── Makefile                # Build commands
+```
+
+## Development Commands
+
+### Code Quality
+
+```bash
+# Format code
+make format
+
+# Lint code
+make lint
+
+# Run all pre-commit checks
+uv run pre-commit run --all-files
+
+# Run pre-commit on specific file
+uv run pre-commit run --files path/to/file.py
+```
+
+### Testing
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run SDK tests only
+uv run pytest tests/sdk/
+
+# Run tools tests only
+uv run pytest tests/tools/
+
+# Run with coverage
+uv run pytest --cov=openhands
+
+# Run specific test
+uv run pytest tests/sdk/test_agent.py::test_agent_creation
+```
+
+### Building
+
+```bash
+# Build all packages
+make build
+
+# Build agent server binary
+make build-server
+
+# Clean build artifacts
+make clean
+```
+
+## Agent Server Setup
+
+To run the Agent Server:
+
+```bash
+# Start server with default settings (host: 0.0.0.0, port: 8000)
+uv run python -m openhands.agent_server
+
+# Start with custom host and port
+uv run python -m openhands.agent_server --host localhost --port 3000
+
+# Start with auto-reload (for development)
+uv run python -m openhands.agent_server --reload
+```
+
+### Agent Server Configuration File
+
+Create `workspace/openhands_agent_server_config.json`:
+
+```json
+{
+  "session_api_key": "your-secret-api-key",
+  "allow_cors_origins": ["https://your-frontend.com"],
+  "conversations_path": "workspace/conversations",
+  "webhooks": [
+    {
+      "webhook_url": "https://your-webhook-endpoint.com/events",
+      "method": "POST",
+      "event_buffer_size": 10,
+      "num_retries": 3,
+      "retry_delay": 5,
+      "headers": {
+        "Authorization": "Bearer your-webhook-token"
+      }
+    }
+  ]
+}
+```
+
+Access the API documentation at: `http://localhost:8000/docs`
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Import errors after installation">
+    Ensure you're using the correct Python environment:
+    
+    ```bash
+    which python
+    python --version  # Should be 3.12+
+    ```
+    
+    If using UV, make sure to run commands with `uv run`:
+    ```bash
+    uv run python your_script.py
+    ```
+  </Accordion>
+
+  <Accordion title="LLM API key not found">
+    Verify your environment variable is set:
+    
+    ```bash
+    echo $LLM_API_KEY
+    ```
+    
+    If empty, export it:
+    ```bash
+    export LLM_API_KEY="your-key-here"
+    ```
+    
+    For persistence, add to `~/.bashrc`, `~/.zshrc`, or `~/.profile`.
+  </Accordion>
+
+  <Accordion title="Agent Server port already in use">
+    Change the port:
+    
+    ```bash
+    uv run python -m openhands.agent_server --port 3001
+    ```
+    
+    Or find and kill the process using the port:
+    ```bash
+    # On Linux/macOS
+    lsof -ti:8000 | xargs kill -9
+    
+    # On Windows
+    netstat -ano | findstr :8000
+    taskkill /PID <PID> /F
+    ```
+  </Accordion>
+
+  <Accordion title="Tests failing after installation">
+    Clean and rebuild:
+    
+    ```bash
+    make clean
+    make build
+    uv run pytest tests/sdk/ -v
+    ```
+    
+    If specific tests fail, check dependencies:
+    ```bash
+    uv run pip list | grep openhands
+    ```
+  </Accordion>
+
+  <Accordion title="Docker workspace not working">
+    Ensure Docker is running:
+    
+    ```bash
+    docker ps
+    ```
+    
+    Install Docker if needed:
+    - macOS: Docker Desktop
+    - Linux: `sudo apt install docker.io` or equivalent
+    - Windows: Docker Desktop with WSL2
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/docs/architecture">
+    Learn about core concepts and design
+  </Card>
+  <Card title="Usage Guide" icon="code" href="/docs/usage">
+    Explore examples and common patterns
+  </Card>
+  <Card title="API Reference" icon="book" href="/docs/api">
+    Detailed API documentation
+  </Card>
+  <Card title="Examples" icon="flask" href="https://github.com/OpenHands/software-agent-sdk/tree/main/examples">
+    Browse example code
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+- **Documentation**: https://docs.openhands.dev/sdk
+- **GitHub Issues**: https://github.com/OpenHands/software-agent-sdk/issues
+- **Slack Community**: https://openhands.dev/joinslack
+- **Development Guide**: See `DEVELOPMENT.md` in the repository

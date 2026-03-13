@@ -1,0 +1,776 @@
+---
+title: "Usage Guide"
+description: "Practical examples and common patterns for using the OpenHands SDK"
+---
+
+# Usage Guide
+
+This guide covers common usage patterns and practical examples for building agents with the OpenHands SDK.
+
+## Basic Usage
+
+### Hello World
+
+The simplest way to create an agent:
+
+```python
+import os
+from openhands.sdk import LLM, Agent, Conversation, Tool
+from openhands.tools.file_editor import FileEditorTool
+from openhands.tools.terminal import TerminalTool
+
+# Configure LLM
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+)
+
+# Create agent with tools
+agent = Agent(
+    llm=llm,
+    tools=[
+        Tool(name=TerminalTool.name),
+        Tool(name=FileEditorTool.name),
+    ],
+)
+
+# Start conversation
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+conversation.send_message("Write 3 facts about the current project into FACTS.txt.")
+conversation.run()
+```
+
+**Example location**: `examples/01_standalone_sdk/01_hello_world.py`
+
+### Async Usage
+
+For async environments:
+
+```python
+import asyncio
+import os
+from openhands.sdk import LLM, Agent, Conversation, Tool
+from openhands.tools.terminal import TerminalTool
+
+async def main():
+    llm = LLM(
+        model="anthropic/claude-sonnet-4-5-20250929",
+        api_key=os.getenv("LLM_API_KEY"),
+    )
+    
+    agent = Agent(llm=llm, tools=[Tool(name=TerminalTool.name)])
+    conversation = Conversation(agent=agent, workspace=os.getcwd())
+    
+    # Send message and wait
+    conversation.send_message("List all Python files")
+    await conversation.arun()
+
+asyncio.run(main())
+```
+
+**Example location**: `examples/01_standalone_sdk/11_async.py`
+
+## Working with Tools
+
+### Built-in Tools
+
+The SDK provides several built-in tools:
+
+```python
+from openhands.sdk import Tool
+from openhands.tools.terminal import TerminalTool
+from openhands.tools.file_editor import FileEditorTool
+from openhands.tools.task_tracker import TaskTrackerTool
+from openhands.tools.browser_use import BrowserUseTool
+from openhands.tools.delegate import DelegateTool
+
+tools = [
+    Tool(name=TerminalTool.name),          # Execute shell commands
+    Tool(name=FileEditorTool.name),        # Read/write files
+    Tool(name=TaskTrackerTool.name),       # Track tasks
+    Tool(name=BrowserUseTool.name),        # Browser automation
+    Tool(name=DelegateTool.name),          # Delegate to sub-agents
+]
+
+agent = Agent(llm=llm, tools=tools)
+```
+
+### Custom Tools
+
+Create custom tools using the `@register_tool` decorator:
+
+```python
+from openhands.sdk import register_tool, Agent, Conversation
+from pydantic import BaseModel
+
+class GitStatusInput(BaseModel):
+    repo_path: str
+
+@register_tool
+def git_status(input: GitStatusInput) -> str:
+    """Get git status of a repository.
+    
+    Args:
+        repo_path: Path to git repository
+        
+    Returns:
+        Git status output
+    """
+    import subprocess
+    result = subprocess.run(
+        ["git", "status"],
+        cwd=input.repo_path,
+        capture_output=True,
+        text=True
+    )
+    return result.stdout
+
+# Use custom tool
+from openhands.sdk import Tool
+agent = Agent(
+    llm=llm,
+    tools=[Tool(name="git_status")]
+)
+```
+
+**Example location**: `examples/01_standalone_sdk/02_custom_tools.py`
+
+### Tool Configuration
+
+Configure tool behavior:
+
+```python
+from openhands.sdk import Tool
+
+# Basic tool
+basic_tool = Tool(name=TerminalTool.name)
+
+# Tool with configuration
+configured_tool = Tool(
+    name=FileEditorTool.name,
+    config={
+        "max_file_size": 1024 * 1024,  # 1MB limit
+        "allowed_extensions": [".py", ".md", ".txt"]
+    }
+)
+```
+
+## LLM Configuration
+
+### Multiple Providers
+
+Support for various LLM providers:
+
+```python
+from openhands.sdk import LLM
+
+# Anthropic Claude
+llm_claude = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("ANTHROPIC_API_KEY"),
+)
+
+# OpenAI
+llm_openai = LLM(
+    model="gpt-4",
+    api_key=os.getenv("OPENAI_API_KEY"),
+)
+
+# AWS Bedrock
+llm_bedrock = LLM(
+    model="bedrock/anthropic.claude-v2",
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    aws_region="us-west-2",
+)
+
+# Local model
+llm_local = LLM(
+    model="llama-3.1-70b",
+    base_url="http://localhost:8000/v1",
+    api_key="not-needed",
+)
+```
+
+### LLM Options
+
+Configure LLM behavior:
+
+```python
+from openhands.sdk import LLM
+
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+    temperature=0.0,        # Deterministic output
+    top_p=1.0,              # Nucleus sampling
+    max_tokens=4096,        # Max response length
+    timeout=60,             # Request timeout
+    max_retries=3,          # Retry attempts
+)
+```
+
+### LLM Fallback Strategy
+
+Automatically fallback to alternative models:
+
+```python
+from openhands.sdk import LLM, FallbackStrategy
+
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+    fallback_strategy=FallbackStrategy(
+        fallback_models=["gpt-4", "gpt-3.5-turbo"],
+        retry_count=2
+    )
+)
+```
+
+**Example location**: `examples/01_standalone_sdk/39_llm_fallback.py`
+
+### Streaming Responses
+
+Stream LLM responses token-by-token:
+
+```python
+from openhands.sdk import LLM, Agent, Conversation
+
+def token_callback(chunk):
+    print(chunk.content, end="", flush=True)
+
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+    stream=True,
+    token_callback=token_callback,
+)
+
+agent = Agent(llm=llm, tools=[])
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+conversation.send_message("Explain Python decorators")
+conversation.run()
+```
+
+**Example location**: `examples/01_standalone_sdk/29_llm_streaming.py`
+
+## Conversation Management
+
+### Basic Conversation
+
+```python
+from openhands.sdk import Conversation, Agent
+
+conversation = Conversation(
+    agent=agent,
+    workspace="/path/to/workspace",
+)
+
+# Send messages
+conversation.send_message("First task")
+conversation.run()
+
+conversation.send_message("Follow-up task")
+conversation.run()
+```
+
+### Conversation Persistence
+
+Save and restore conversation state:
+
+```python
+from openhands.sdk import Conversation
+
+# Create with persistence
+conversation = Conversation(
+    agent=agent,
+    workspace=os.getcwd(),
+    persistence_dir="./conversation_state"
+)
+
+# Send messages
+conversation.send_message("Create a README")
+conversation.run()
+
+# Restore later
+restored = Conversation(
+    agent=agent,
+    workspace=os.getcwd(),
+    persistence_dir="./conversation_state"
+)
+# State is automatically restored
+```
+
+**Example location**: `examples/01_standalone_sdk/10_persistence.py`
+
+### Conversation Callbacks
+
+Monitor conversation progress:
+
+```python
+from openhands.sdk import Conversation, ConversationCallbackType
+
+def on_event(event):
+    print(f"Event: {event.type} - {event.content}")
+
+conversation = Conversation(
+    agent=agent,
+    workspace=os.getcwd(),
+    callbacks={
+        ConversationCallbackType.ON_EVENT: on_event,
+    }
+)
+```
+
+### Interactive Mode with Confirmation
+
+Require confirmation for sensitive operations:
+
+```python
+from openhands.sdk import Conversation
+
+def confirmation_callback(action):
+    print(f"Agent wants to: {action.content}")
+    response = input("Allow? (y/n): ")
+    return response.lower() == 'y'
+
+conversation = Conversation(
+    agent=agent,
+    workspace=os.getcwd(),
+    require_confirmation=True,
+    confirmation_callback=confirmation_callback
+)
+```
+
+**Example location**: `examples/01_standalone_sdk/04_confirmation_mode_example.py`
+
+## Working with Workspaces
+
+### Local Workspace
+
+Execute in local directory:
+
+```python
+from openhands.sdk import LocalWorkspace, Conversation
+
+workspace = LocalWorkspace("/path/to/project")
+conversation = Conversation(agent=agent, workspace=workspace)
+```
+
+### Remote Workspace (Agent Server)
+
+Execute in isolated environment:
+
+```python
+from openhands.sdk import RemoteWorkspace, RemoteConversation
+
+# Connect to Agent Server
+conversation = RemoteConversation(
+    agent=agent,
+    base_url="http://localhost:8000",
+    workspace_id="my-workspace",
+)
+
+conversation.send_message("Run tests")
+conversation.run()
+```
+
+**Example location**: `examples/02_remote_agent_server/01_convo_with_local_agent_server.py`
+
+### Docker Workspace
+
+Execute in Docker container:
+
+```python
+from openhands.workspace import DockerWorkspace
+from openhands.sdk import Conversation
+
+workspace = DockerWorkspace(
+    image="python:3.12-slim",
+    workspace_dir="/workspace",
+    mount_path="/path/to/local/files"
+)
+
+conversation = Conversation(agent=agent, workspace=workspace)
+```
+
+**Example location**: `examples/02_remote_agent_server/02_convo_with_docker_sandboxed_server.py`
+
+## Advanced Features
+
+### Skills
+
+Load reusable agent capabilities:
+
+```python
+from openhands.sdk import load_project_skills, Conversation
+
+# Load from .openhands/skills/ directory
+skills = load_project_skills()
+
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+conversation.context.add_skills(skills)
+```
+
+**Example location**: `examples/01_standalone_sdk/03_activate_skill.py`
+
+### Sub-agents and Delegation
+
+Create hierarchical agent architectures:
+
+```python
+from openhands.sdk import Agent, register_agent, Tool
+from openhands.tools.delegate import DelegateTool
+
+# Create specialized sub-agent
+testing_agent = Agent(
+    llm=llm,
+    tools=[Tool(name="terminal")],
+    system_message="You are an expert at writing tests."
+)
+
+# Register sub-agent
+register_agent("testing_expert", lambda: testing_agent)
+
+# Use delegation in main agent
+main_agent = Agent(
+    llm=llm,
+    tools=[
+        Tool(name=DelegateTool.name),
+        Tool(name="file_editor"),
+    ],
+)
+
+conversation = Conversation(agent=main_agent, workspace=os.getcwd())
+conversation.send_message("Write tests for all Python files")
+conversation.run()
+```
+
+**Example location**: `examples/01_standalone_sdk/25_agent_delegation.py`
+
+### MCP Integration
+
+Integrate with Model Context Protocol servers:
+
+```python
+from openhands.sdk import MCPClient, create_mcp_tools, Agent
+
+async def main():
+    # Connect to MCP server
+    mcp_client = MCPClient(
+        server_url="http://localhost:3000",
+        server_params={"api_key": "your-key"}
+    )
+    
+    # Create tools from MCP server
+    mcp_tools = await create_mcp_tools(mcp_client)
+    
+    # Use in agent
+    agent = Agent(llm=llm, tools=mcp_tools)
+    conversation = Conversation(agent=agent, workspace=os.getcwd())
+    
+    conversation.send_message("Use the MCP tools to fetch data")
+    await conversation.arun()
+
+import asyncio
+asyncio.run(main())
+```
+
+**Example location**: `examples/01_standalone_sdk/07_mcp_integration.py`
+
+### Browser Automation
+
+Automate web browsing:
+
+```python
+from openhands.sdk import Agent, Conversation, Tool
+from openhands.tools.browser_use import BrowserUseTool
+
+agent = Agent(
+    llm=llm,
+    tools=[Tool(name=BrowserUseTool.name)],
+)
+
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+conversation.send_message("Navigate to github.com and search for 'OpenHands'")
+conversation.run()
+```
+
+**Example location**: `examples/01_standalone_sdk/15_browser_use.py`
+
+### Context Management
+
+Handle large conversations with context compression:
+
+```python
+from openhands.sdk import (
+    Agent, Conversation, AgentContext, LLMSummarizingCondenser
+)
+
+# Create context with condenser
+context = AgentContext(
+    max_tokens=100000,
+    condenser=LLMSummarizingCondenser(llm=llm)
+)
+
+agent = Agent(llm=llm, tools=[], context=context)
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+
+# Long conversation will be automatically summarized
+for i in range(100):
+    conversation.send_message(f"Task {i}")
+    conversation.run()
+```
+
+**Example location**: `examples/01_standalone_sdk/14_context_condenser.py`
+
+### Observability
+
+Monitor agent behavior with Laminar:
+
+```python
+import os
+os.environ["LMNR_PROJECT_API_KEY"] = "your-laminar-key"
+
+from openhands.sdk import LLM, Agent, Conversation
+
+# Observability is automatically enabled
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+)
+
+agent = Agent(llm=llm, tools=[])
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+
+# All interactions are logged to Laminar
+conversation.send_message("Analyze this codebase")
+conversation.run()
+```
+
+**Example location**: `examples/01_standalone_sdk/27_observability_laminar.py`
+
+## Agent Server Usage
+
+### Starting the Server
+
+```bash
+# Start server
+uv run python -m openhands.agent_server --port 8000
+
+# With configuration
+export OH_SECRET_KEY=$(openssl rand -hex 32)
+export SESSION_API_KEY="your-session-key"
+uv run python -m openhands.agent_server
+```
+
+### REST API
+
+```python
+import httpx
+
+# Create conversation
+response = httpx.post(
+    "http://localhost:8000/conversations",
+    json={
+        "agent": {
+            "llm": {
+                "model": "anthropic/claude-sonnet-4-5-20250929",
+                "api_key": "your-key"
+            },
+            "tools": [{"name": "terminal"}]
+        },
+        "workspace": "/path/to/workspace"
+    }
+)
+conversation_id = response.json()["id"]
+
+# Send message
+httpx.post(
+    f"http://localhost:8000/conversations/{conversation_id}/events",
+    json={"content": "List all Python files"}
+)
+
+# Get events
+events = httpx.get(
+    f"http://localhost:8000/conversations/{conversation_id}/events"
+).json()
+```
+
+### WebSocket API
+
+```python
+import asyncio
+import websockets
+import json
+
+async def agent_conversation():
+    uri = "ws://localhost:8000/conversations/{conversation_id}/events/socket"
+    
+    async with websockets.connect(uri) as websocket:
+        # Send message
+        await websocket.send(json.dumps({
+            "type": "message",
+            "content": "Write a README"
+        }))
+        
+        # Receive events
+        async for message in websocket:
+            event = json.loads(message)
+            print(f"Event: {event['type']}")
+            
+            if event['type'] == 'done':
+                break
+
+asyncio.run(agent_conversation())
+```
+
+## Common Patterns
+
+### Task Planning Workflow
+
+```python
+from openhands.sdk import Agent, Conversation, Tool
+from openhands.tools.task_tracker import TaskTrackerTool
+from openhands.tools.terminal import TerminalTool
+from openhands.tools.file_editor import FileEditorTool
+
+agent = Agent(
+    llm=llm,
+    tools=[
+        Tool(name=TaskTrackerTool.name),
+        Tool(name=TerminalTool.name),
+        Tool(name=FileEditorTool.name),
+    ],
+    system_message="""
+    You are a planning agent. For each task:
+    1. Use task_tracker to break down the work
+    2. Execute each subtask systematically
+    3. Mark tasks complete as you finish
+    """
+)
+
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+conversation.send_message("Refactor the authentication module")
+conversation.run()
+```
+
+**Example location**: `examples/01_standalone_sdk/24_planning_agent_workflow.py`
+
+### Iterative Refinement
+
+```python
+from openhands.sdk import Agent, Conversation
+
+agent = Agent(
+    llm=llm,
+    tools=[Tool(name=TerminalTool.name), Tool(name=FileEditorTool.name)],
+    max_iterations=50,  # Allow more iterations
+)
+
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+
+# Initial request
+conversation.send_message("Write a sorting algorithm")
+conversation.run()
+
+# Refinement
+conversation.send_message("Add more test cases")
+conversation.run()
+
+# Further refinement
+conversation.send_message("Optimize for performance")
+conversation.run()
+```
+
+**Example location**: `examples/01_standalone_sdk/31_iterative_refinement.py`
+
+### Multi-Agent Collaboration
+
+```python
+from openhands.sdk import Agent, register_agent, Conversation, Tool
+from openhands.tools.delegate import DelegateTool
+
+# Specialist agents
+researcher = Agent(llm=llm, tools=[...], system_message="You research solutions")
+implementer = Agent(llm=llm, tools=[...], system_message="You implement code")
+tester = Agent(llm=llm, tools=[...], system_message="You write tests")
+
+# Register specialists
+register_agent("researcher", lambda: researcher)
+register_agent("implementer", lambda: implementer)
+register_agent("tester", lambda: tester)
+
+# Coordinator agent
+coordinator = Agent(
+    llm=llm,
+    tools=[Tool(name=DelegateTool.name)],
+    system_message="Coordinate work between specialist agents"
+)
+
+conversation = Conversation(agent=coordinator, workspace=os.getcwd())
+conversation.send_message("Build a web scraper with tests")
+conversation.run()
+```
+
+## Testing
+
+### Unit Testing Agents
+
+```python
+import pytest
+from openhands.sdk import Agent, LLM, Tool
+
+@pytest.fixture
+def test_agent():
+    llm = LLM(model="gpt-4", api_key="test-key")
+    return Agent(llm=llm, tools=[])
+
+def test_agent_creation(test_agent):
+    assert test_agent.llm.model == "gpt-4"
+    assert len(test_agent.tools) == 0
+
+def test_agent_with_tools():
+    llm = LLM(model="gpt-4", api_key="test-key")
+    agent = Agent(llm=llm, tools=[Tool(name="terminal")])
+    assert len(agent.tools) == 1
+```
+
+### Integration Testing
+
+See `tests/integration/` for comprehensive integration test examples.
+
+## Examples Reference
+
+The repository includes 40+ examples organized by category:
+
+| Category | Path | Description |
+|----------|------|-------------|
+| Standalone SDK | `examples/01_standalone_sdk/` | Basic usage, custom tools, MCP, async |
+| Remote Agent Server | `examples/02_remote_agent_server/` | Docker, API, cloud workspaces |
+| GitHub Workflows | `examples/03_github_workflows/` | CI/CD integration |
+| LLM-Specific | `examples/04_llm_specific_tools/` | Provider-specific features |
+| Skills & Plugins | `examples/05_skills_and_plugins/` | Extending functionality |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/docs/api">
+    Detailed API documentation
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/docs/architecture">
+    Learn about core concepts
+  </Card>
+  <Card title="Examples" icon="flask" href="https://github.com/OpenHands/software-agent-sdk/tree/main/examples">
+    Browse all examples
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="https://github.com/OpenHands/software-agent-sdk/blob/main/DEVELOPMENT.md">
+    Development guide
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+- **Documentation**: https://docs.openhands.dev/sdk
+- **GitHub Issues**: https://github.com/OpenHands/software-agent-sdk/issues
+- **Slack**: https://openhands.dev/joinslack

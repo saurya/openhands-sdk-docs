@@ -1,0 +1,135 @@
+---
+title: "Introduction"
+description: "Build AI agents that work with code using the OpenHands Software Agent SDK"
+---
+
+# OpenHands Software Agent SDK
+
+The OpenHands Software Agent SDK is a set of Python and REST APIs for **building agents that work with code**. It provides a composable and extensible foundation for creating production-ready AI agents that can perform complex software engineering tasks.
+
+<img 
+  src="https://raw.githubusercontent.com/OpenHands/docs/main/openhands/static/img/logo.png" 
+  alt="OpenHands Logo" 
+  width="200"
+/>
+
+## What Can You Build?
+
+The OpenHands SDK enables you to create agents for:
+
+- **One-off tasks**: Building READMEs, generating documentation, creating test files
+- **Routine maintenance**: Updating dependencies, refactoring code, fixing bugs
+- **Major projects**: Multi-agent architectures, complex refactors, and rewrites
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Local & Remote Execution" icon="server">
+    Run agents on your local machine or in ephemeral workspaces (Docker, Kubernetes)
+  </Card>
+  <Card title="Built-in Tools" icon="toolbox">
+    File editor, terminal, task tracker, browser automation, and more
+  </Card>
+  <Card title="MCP Integration" icon="plug">
+    Model Context Protocol support for extending agent capabilities
+  </Card>
+  <Card title="Agent Server" icon="network-wired">
+    REST/WebSocket API for remote agent control and integration
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+The SDK is organized as a Python monorepo with four main packages:
+
+| Package | Description | Path |
+|---------|-------------|------|
+| `openhands-sdk` | Core SDK functionality (Agent, LLM, Conversation, Tools) | `openhands-sdk/` |
+| `openhands-tools` | Built-in tools for agents (file editor, terminal, etc.) | `openhands-tools/` |
+| `openhands-workspace` | Workspace management (local and Docker-based) | `openhands-workspace/` |
+| `openhands-agent-server` | REST/WebSocket server for remote agent control | `openhands-agent-server/` |
+
+## Quick Example
+
+Here's a minimal example of using the SDK:
+
+```python
+import os
+from openhands.sdk import LLM, Agent, Conversation, Tool
+from openhands.tools.file_editor import FileEditorTool
+from openhands.tools.terminal import TerminalTool
+
+# Configure LLM
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+)
+
+# Create agent with tools
+agent = Agent(
+    llm=llm,
+    tools=[
+        Tool(name=TerminalTool.name),
+        Tool(name=FileEditorTool.name),
+    ],
+)
+
+# Start a conversation
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+conversation.send_message("Write 3 facts about the current project into FACTS.txt.")
+conversation.run()
+```
+
+## Repository Structure
+
+The source repository is located at:
+- **GitHub**: https://github.com/OpenHands/software-agent-sdk
+- **Local path**: `/openhands-sdk/`, `/openhands-tools/`, `/openhands-workspace/`, `/openhands-agent-server/`
+
+Additional resources:
+- **Examples**: `examples/` directory contains comprehensive usage examples
+- **Tests**: `tests/` directory with domain-specific test suites
+- **Scripts**: `scripts/` directory with utilities and tools
+
+## Documentation
+
+<CardGroup cols={2}>
+  <Card title="Setup Guide" icon="download" href="/docs/setup">
+    Installation and configuration instructions
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/docs/architecture">
+    Core concepts and component design
+  </Card>
+  <Card title="Usage Guide" icon="code" href="/docs/usage">
+    Examples and common patterns
+  </Card>
+  <Card title="API Reference" icon="book" href="/docs/api">
+    Complete API documentation
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+- **Slack**: [Join the OpenHands community](https://openhands.dev/joinslack)
+- **GitHub Issues**: [Report bugs or request features](https://github.com/OpenHands/software-agent-sdk/issues)
+- **Documentation**: [Official docs](https://docs.openhands.dev/sdk)
+
+## License
+
+The OpenHands Software Agent SDK is released under the MIT License.
+
+## Citation
+
+If you use the OpenHands SDK in your research, please cite:
+
+```bibtex
+@misc{wang2025openhandssoftwareagentsdk,
+      title={The OpenHands Software Agent SDK: A Composable and Extensible Foundation for Production Agents}, 
+      author={Xingyao Wang and Simon Rosenberg and Juan Michelini and Calvin Smith and Hoang Tran and Engel Nyst and Rohit Malhotra and Xuhui Zhou and Valerie Chen and Robert Brennan and Graham Neubig},
+      year={2025},
+      eprint={2511.03690},
+      archivePrefix={arXiv},
+      primaryClass={cs.SE},
+      url={https://arxiv.org/abs/2511.03690}, 
+}
+```

@@ -1,0 +1,888 @@
+---
+title: "API Reference"
+description: "Complete API reference for the OpenHands Software Agent SDK"
+---
+
+# API Reference
+
+Complete reference documentation for the OpenHands Software Agent SDK public API.
+
+## Core Classes
+
+### Agent
+
+**Location**: `openhands-sdk/openhands/sdk/agent/agent.py`
+
+The central component that orchestrates LLM interactions and tool execution.
+
+```python
+from openhands.sdk import Agent
+
+agent = Agent(
+    llm: LLM,
+    tools: list[Tool] = [],
+    max_iterations: int = 100,
+    system_message: str | None = None,
+    context: AgentContext | None = None,
+    security_policy: SecurityPolicy | None = None,
+)
+```
+
+**Parameters**:
+- `llm` (LLM): Language model configuration
+- `tools` (list[Tool]): Available tools for the agent
+- `max_iterations` (int): Maximum conversation steps before stopping
+- `system_message` (str | None): Custom system prompt
+- `context` (AgentContext | None): Context management configuration
+- `security_policy` (SecurityPolicy | None): Security constraints
+
+**Attributes**:
+- `llm`: Configured LLM instance
+- `tools`: List of available tools
+- `max_iterations`: Maximum iterations
+- `system_message`: System prompt
+
+**Example**:
+```python
+from openhands.sdk import Agent, LLM, Tool
+from openhands.tools.terminal import TerminalTool
+
+llm = LLM(model="anthropic/claude-sonnet-4-5-20250929", api_key="...")
+agent = Agent(
+    llm=llm,
+    tools=[Tool(name=TerminalTool.name)],
+    max_iterations=50
+)
+```
+
+---
+
+### LLM
+
+**Location**: `openhands-sdk/openhands/sdk/llm/llm.py`
+
+Manages communication with language models.
+
+```python
+from openhands.sdk import LLM
+
+llm = LLM(
+    model: str,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    temperature: float = 0.0,
+    top_p: float = 1.0,
+    max_tokens: int = 4096,
+    timeout: int = 60,
+    max_retries: int = 3,
+    stream: bool = False,
+    token_callback: TokenCallbackType | None = None,
+    fallback_strategy: FallbackStrategy | None = None,
+    # AWS-specific
+    aws_access_key_id: str | None = None,
+    aws_secret_access_key: str | None = None,
+    aws_region: str | None = None,
+)
+```
+
+**Parameters**:
+- `model` (str): Model identifier (e.g., "anthropic/claude-sonnet-4-5-20250929", "gpt-4")
+- `api_key` (str | None): API key for the provider
+- `base_url` (str | None): Custom API endpoint URL
+- `temperature` (float): Sampling temperature (0.0 = deterministic, 1.0 = creative)
+- `top_p` (float): Nucleus sampling parameter
+- `max_tokens` (int): Maximum response length
+- `timeout` (int): Request timeout in seconds
+- `max_retries` (int): Number of retry attempts on failure
+- `stream` (bool): Enable token-level streaming
+- `token_callback` (TokenCallbackType | None): Callback for streaming tokens
+- `fallback_strategy` (FallbackStrategy | None): Fallback configuration
+- `aws_access_key_id`, `aws_secret_access_key`, `aws_region`: AWS credentials for Bedrock
+
+**Methods**:
+- `chat(messages: list[Message], tools: list[ToolDefinition] | None = None) -> LLMResponse`: Send chat request
+- `stream_chat(messages: list[Message], tools: list[ToolDefinition] | None = None) -> AsyncIterator[LLMStreamChunk]`: Stream chat response
+
+**Example**:
+```python
+from openhands.sdk import LLM
+
+# Basic usage
+llm = LLM(model="gpt-4", api_key="sk-...")
+
+# With configuration
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key="sk-ant-...",
+    temperature=0.2,
+    max_tokens=8192,
+    timeout=120
+)
+
+# AWS Bedrock
+llm = LLM(
+    model="bedrock/anthropic.claude-v2",
+    aws_access_key_id="...",
+    aws_secret_access_key="...",
+    aws_region="us-west-2"
+)
+```
+
+---
+
+### Conversation
+
+**Location**: `openhands-sdk/openhands/sdk/conversation/conversation.py`
+
+Manages message flow and agent execution lifecycle.
+
+```python
+from openhands.sdk import Conversation
+
+conversation = Conversation(
+    agent: Agent,
+    workspace: str | Workspace,
+    persistence_dir: str | None = None,
+    plugins: list[Plugin] = [],
+    callbacks: dict[ConversationCallbackType, callable] = {},
+    require_confirmation: bool = False,
+    confirmation_callback: callable | None = None,
+)
+```
+
+**Parameters**:
+- `agent` (Agent): Agent configuration
+- `workspace` (str | Workspace): Workspace path or instance
+- `persistence_dir` (str | None): Directory for saving conversation state
+- `plugins` (list[Plugin]): Plugins to extend functionality
+- `callbacks` (dict): Event callbacks
+- `require_confirmation` (bool): Require user confirmation for actions
+- `confirmation_callback` (callable | None): Custom confirmation handler
+
+**Methods**:
+- `send_message(content: str, images: list[str] = [])`: Send user message
+- `run()`: Execute agent until completion or max_iterations
+- `arun()`: Async version of run()
+- `pause()`: Pause conversation
+- `resume()`: Resume paused conversation
+- `get_events() -> list[Event]`: Get all conversation events
+- `get_stats() -> ConversationStats`: Get conversation statistics
+
+**Properties**:
+- `context`: Agent context
+- `status`: Current execution status
+- `events`: List of events
+
+**Example**:
+```python
+from openhands.sdk import Conversation, Agent
+
+conversation = Conversation(
+    agent=agent,
+    workspace="/path/to/project",
+    persistence_dir="./state"
+)
+
+conversation.send_message("Create a README")
+conversation.run()
+
+# Check stats
+stats = conversation.get_stats()
+print(f"Total cost: ${stats.total_cost}")
+```
+
+---
+
+### Tool
+
+**Location**: `openhands-sdk/openhands/sdk/tool/tool.py`
+
+Represents an agent capability.
+
+```python
+from openhands.sdk import Tool
+
+tool = Tool(
+    name: str,
+    config: dict | None = None,
+)
+```
+
+**Parameters**:
+- `name` (str): Tool identifier (must be registered)
+- `config` (dict | None): Tool-specific configuration
+
+**Tool Registration**:
+```python
+from openhands.sdk import register_tool
+from pydantic import BaseModel
+
+class MyToolInput(BaseModel):
+    param: str
+
+@register_tool
+def my_tool(input: MyToolInput) -> str:
+    """Tool description for LLM."""
+    return f"Result: {input.param}"
+
+# Use registered tool
+tool = Tool(name="my_tool")
+```
+
+**Built-in Tools**:
+
+| Tool Name | Description | Import |
+|-----------|-------------|--------|
+| `terminal` | Execute shell commands | `from openhands.tools.terminal import TerminalTool` |
+| `file_editor` | Read, write, edit files | `from openhands.tools.file_editor import FileEditorTool` |
+| `task_tracker` | Track tasks and progress | `from openhands.tools.task_tracker import TaskTrackerTool` |
+| `browser_use` | Browser automation | `from openhands.tools.browser_use import BrowserUseTool` |
+| `delegate` | Delegate to sub-agents | `from openhands.tools.delegate import DelegateTool` |
+
+**Example**:
+```python
+from openhands.sdk import Tool
+from openhands.tools.terminal import TerminalTool
+from openhands.tools.file_editor import FileEditorTool
+
+tools = [
+    Tool(name=TerminalTool.name),
+    Tool(name=FileEditorTool.name, config={"max_file_size": 1024*1024}),
+]
+```
+
+---
+
+### Workspace
+
+**Location**: `openhands-sdk/openhands/sdk/workspace/workspace.py`
+
+Abstract base for workspace implementations.
+
+```python
+from openhands.sdk import LocalWorkspace, RemoteWorkspace
+
+# Local workspace
+workspace = LocalWorkspace(path: str)
+
+# Remote workspace
+workspace = RemoteWorkspace(
+    workspace_id: str,
+    base_url: str,
+)
+```
+
+**LocalWorkspace Parameters**:
+- `path` (str): Path to workspace directory
+
+**RemoteWorkspace Parameters**:
+- `workspace_id` (str): Unique workspace identifier
+- `base_url` (str): Agent Server URL
+
+**Example**:
+```python
+from openhands.sdk import LocalWorkspace, Conversation
+
+workspace = LocalWorkspace("/home/user/project")
+conversation = Conversation(agent=agent, workspace=workspace)
+```
+
+---
+
+## Message Types
+
+### Message
+
+**Location**: `openhands-sdk/openhands/sdk/llm/message.py`
+
+Represents a chat message.
+
+```python
+from openhands.sdk import Message, TextContent, ImageContent
+
+message = Message(
+    role: Literal["user", "assistant", "system"],
+    content: list[TextContent | ImageContent],
+)
+```
+
+**Content Types**:
+```python
+# Text content
+text = TextContent(text="Hello, agent!")
+
+# Image content
+image = ImageContent(
+    image_url="https://example.com/image.png"
+    # or
+    image_data=base64_encoded_data,
+    media_type="image/png"
+)
+
+# Message with mixed content
+message = Message(
+    role="user",
+    content=[
+        TextContent(text="What's in this image?"),
+        ImageContent(image_url="https://example.com/photo.jpg")
+    ]
+)
+```
+
+---
+
+## Events
+
+### Event
+
+**Location**: `openhands-sdk/openhands/sdk/event/event.py`
+
+Base class for all events in the system.
+
+**Common Event Types**:
+- `MessageEvent`: User or agent messages
+- `ActionEvent`: Tool invocations
+- `ObservationEvent`: Tool results
+- `AgentStateEvent`: Agent state changes
+- `ErrorEvent`: Error conditions
+
+**Example**:
+```python
+from openhands.sdk import Conversation
+
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+conversation.send_message("Hello")
+conversation.run()
+
+# Get all events
+events = conversation.get_events()
+for event in events:
+    print(f"{event.type}: {event.content}")
+```
+
+---
+
+## Plugin System
+
+### Plugin
+
+**Location**: `openhands-sdk/openhands/sdk/plugin/plugin.py`
+
+Extend conversation functionality.
+
+```python
+from openhands.sdk import Plugin
+
+class MyPlugin(Plugin):
+    def on_load(self, conversation: Conversation):
+        """Called when plugin is loaded."""
+        pass
+    
+    def on_message(self, message: str):
+        """Called when message is sent."""
+        pass
+    
+    def on_event(self, event: Event):
+        """Called on each event."""
+        pass
+
+# Use plugin
+conversation = Conversation(
+    agent=agent,
+    workspace=workspace,
+    plugins=[MyPlugin()]
+)
+```
+
+---
+
+## Skills & Sub-agents
+
+### Skills
+
+**Location**: `openhands-sdk/openhands/sdk/skills/`
+
+Load reusable agent capabilities from markdown files.
+
+```python
+from openhands.sdk import (
+    load_project_skills,
+    load_user_skills,
+    load_skills_from_dir,
+)
+
+# Load from .openhands/skills/
+project_skills = load_project_skills()
+
+# Load from ~/.openhands/skills/
+user_skills = load_user_skills()
+
+# Load from custom directory
+custom_skills = load_skills_from_dir("/path/to/skills")
+
+# Use in conversation
+conversation.context.add_skills(project_skills)
+```
+
+### Sub-agents
+
+**Location**: `openhands-sdk/openhands/sdk/subagent/`
+
+Register and use specialized agents.
+
+```python
+from openhands.sdk import (
+    register_agent,
+    load_project_agents,
+    load_user_agents,
+    load_agents_from_dir,
+)
+
+# Register agent
+def create_testing_agent():
+    return Agent(llm=llm, tools=[...], system_message="Expert tester")
+
+register_agent("testing_expert", create_testing_agent)
+
+# Load from .openhands/agents/
+project_agents = load_project_agents()
+
+# Load from ~/.openhands/agents/
+user_agents = load_user_agents()
+
+# Load from custom directory
+custom_agents = load_agents_from_dir("/path/to/agents")
+```
+
+---
+
+## Context Management
+
+### AgentContext
+
+**Location**: `openhands-sdk/openhands/sdk/context/context.py`
+
+Manages conversation context and token limits.
+
+```python
+from openhands.sdk import AgentContext, LLMSummarizingCondenser
+
+context = AgentContext(
+    max_tokens: int = 100000,
+    condenser: Condenser | None = None,
+)
+
+# With summarization
+context = AgentContext(
+    max_tokens=100000,
+    condenser=LLMSummarizingCondenser(llm=llm)
+)
+
+# Use in agent
+agent = Agent(llm=llm, tools=[], context=context)
+```
+
+---
+
+## MCP Integration
+
+### MCPClient
+
+**Location**: `openhands-sdk/openhands/sdk/mcp/client.py`
+
+Connect to Model Context Protocol servers.
+
+```python
+from openhands.sdk import MCPClient, create_mcp_tools
+
+# Create client
+mcp_client = MCPClient(
+    server_url: str,
+    server_params: dict | None = None,
+)
+
+# Create tools
+mcp_tools = await create_mcp_tools(mcp_client)
+
+# Use in agent
+agent = Agent(llm=llm, tools=mcp_tools)
+```
+
+---
+
+## Observability
+
+### LLM Metrics
+
+Get LLM usage metrics:
+
+```python
+from openhands.sdk import Conversation
+
+conversation = Conversation(agent=agent, workspace=workspace)
+conversation.send_message("Task")
+conversation.run()
+
+# Get statistics
+stats = conversation.get_stats()
+print(f"Total tokens: {stats.total_tokens}")
+print(f"Total cost: ${stats.total_cost}")
+print(f"Duration: {stats.duration_seconds}s")
+```
+
+### ConversationStats
+
+**Attributes**:
+- `total_tokens` (int): Total tokens used
+- `prompt_tokens` (int): Input tokens
+- `completion_tokens` (int): Output tokens
+- `total_cost` (float): Total cost in USD
+- `duration_seconds` (float): Conversation duration
+- `num_iterations` (int): Number of agent iterations
+
+---
+
+## Error Handling
+
+### LLM Exceptions
+
+**Location**: `openhands-sdk/openhands/sdk/llm/exceptions/`
+
+```python
+from openhands.sdk.llm.exceptions import (
+    LLMException,
+    LLMRateLimitException,
+    LLMAuthenticationException,
+    LLMTimeoutException,
+)
+
+try:
+    response = llm.chat(messages)
+except LLMRateLimitException as e:
+    print(f"Rate limited: {e}")
+    # Implement backoff
+except LLMAuthenticationException as e:
+    print(f"Auth failed: {e}")
+    # Check API key
+except LLMTimeoutException as e:
+    print(f"Timeout: {e}")
+    # Retry or adjust timeout
+```
+
+---
+
+## Utility Functions
+
+### Tool Management
+
+```python
+from openhands.sdk import (
+    register_tool,
+    resolve_tool,
+    list_registered_tools,
+)
+
+# Register tool
+@register_tool
+def my_tool(input: MyInput) -> str:
+    return "result"
+
+# Resolve tool by name
+tool_def = resolve_tool("my_tool")
+
+# List all registered tools
+all_tools = list_registered_tools()
+```
+
+### Logging
+
+```python
+from openhands.sdk import get_logger
+
+logger = get_logger(__name__)
+logger.info("Message")
+logger.debug("Debug info")
+logger.error("Error occurred")
+```
+
+---
+
+## Agent Server API
+
+### REST Endpoints
+
+**Base URL**: `http://localhost:8000`
+
+#### Create Conversation
+
+```http
+POST /conversations
+Content-Type: application/json
+
+{
+  "agent": {
+    "llm": {
+      "model": "anthropic/claude-sonnet-4-5-20250929",
+      "api_key": "..."
+    },
+    "tools": [{"name": "terminal"}]
+  },
+  "workspace": "/path/to/workspace"
+}
+```
+
+**Response**:
+```json
+{
+  "id": "conv_abc123",
+  "status": "idle",
+  "created_at": "2025-01-15T10:00:00Z"
+}
+```
+
+#### Get Conversation
+
+```http
+GET /conversations/{conversation_id}
+```
+
+#### Send Message
+
+```http
+POST /conversations/{conversation_id}/events
+Content-Type: application/json
+
+{
+  "content": "Write a README",
+  "images": []
+}
+```
+
+#### Get Events
+
+```http
+GET /conversations/{conversation_id}/events
+```
+
+#### Delete Conversation
+
+```http
+DELETE /conversations/{conversation_id}
+```
+
+#### WebSocket Connection
+
+```
+ws://localhost:8000/conversations/{conversation_id}/events/socket
+```
+
+### Server Configuration
+
+Set via environment variables or JSON config file:
+
+```bash
+export OPENHANDS_AGENT_SERVER_CONFIG_PATH="config.json"
+export SESSION_API_KEY="your-api-key"
+export OH_SECRET_KEY=$(openssl rand -hex 32)
+```
+
+**Config file** (`config.json`):
+```json
+{
+  "session_api_key": "your-api-key",
+  "allow_cors_origins": ["https://example.com"],
+  "conversations_path": "workspace/conversations",
+  "webhooks": [
+    {
+      "webhook_url": "https://webhook.example.com",
+      "method": "POST",
+      "event_buffer_size": 10
+    }
+  ]
+}
+```
+
+---
+
+## Type Definitions
+
+### Common Types
+
+```python
+from typing import Literal, Callable, AsyncIterator
+from openhands.sdk import (
+    ConversationCallbackType,      # Callback type enum
+    ConversationExecutionStatus,   # Status enum: idle, running, paused, done
+    TokenCallbackType,              # Token callback: Callable[[LLMStreamChunk], None]
+    FallbackStrategy,               # Fallback configuration
+)
+```
+
+---
+
+## Best Practices
+
+### 1. Resource Management
+
+Always use context managers when possible:
+
+```python
+from openhands.sdk import Conversation
+
+with Conversation(agent=agent, workspace=workspace) as conv:
+    conv.send_message("Task")
+    conv.run()
+# Automatically cleaned up
+```
+
+### 2. Error Handling
+
+Handle LLM errors gracefully:
+
+```python
+from openhands.sdk.llm.exceptions import LLMException
+
+try:
+    conversation.run()
+except LLMException as e:
+    logger.error(f"LLM error: {e}")
+    # Implement retry or fallback
+```
+
+### 3. Security
+
+Use environment variables for sensitive data:
+
+```python
+import os
+from openhands.sdk import LLM
+
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),  # Never hardcode API keys
+)
+```
+
+### 4. Testing
+
+Use dependency injection for testability:
+
+```python
+def create_agent(llm: LLM) -> Agent:
+    return Agent(llm=llm, tools=[...])
+
+# Easy to test with mock LLM
+test_llm = MockLLM()
+test_agent = create_agent(test_llm)
+```
+
+---
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/OpenHands/software-agent-sdk">
+    Source code and issues
+  </Card>
+  <Card title="Examples" icon="flask" href="https://github.com/OpenHands/software-agent-sdk/tree/main/examples">
+    40+ working examples
+  </Card>
+  <Card title="Official Docs" icon="book" href="https://docs.openhands.dev/sdk">
+    Complete documentation
+  </Card>
+  <Card title="Slack Community" icon="slack" href="https://openhands.dev/joinslack">
+    Get help and support
+  </Card>
+</CardGroup>
+
+---
+
+## API Versioning
+
+Current version: **1.13.1**
+
+The SDK follows semantic versioning. Check the version:
+
+```python
+from openhands.sdk import __version__
+print(__version__)  # 1.13.1
+```
+
+## Package Exports
+
+### openhands-sdk
+
+Main exports from `openhands.sdk`:
+
+```python
+from openhands.sdk import (
+    # Core
+    Agent, AgentBase, LLM, Conversation, Tool,
+    
+    # Conversation types
+    LocalConversation, RemoteConversation, BaseConversation,
+    
+    # Workspace
+    Workspace, LocalWorkspace, RemoteWorkspace,
+    
+    # Messages & Events
+    Message, TextContent, ImageContent, Event, MessageEvent,
+    
+    # Context
+    AgentContext, LLMSummarizingCondenser,
+    
+    # MCP
+    MCPClient, create_mcp_tools,
+    
+    # Tools
+    register_tool, resolve_tool, list_registered_tools, ToolDefinition,
+    
+    # Skills & Agents
+    load_project_skills, load_user_skills, load_skills_from_dir,
+    load_project_agents, load_user_agents, load_agents_from_dir,
+    register_agent,
+    
+    # Utilities
+    get_logger, FileStore, LocalFileStore, Plugin,
+    
+    # Types
+    ConversationCallbackType, ConversationExecutionStatus,
+    LLMStreamChunk, FallbackStrategy,
+)
+```
+
+### openhands-tools
+
+Built-in tools:
+
+```python
+from openhands.tools.terminal import TerminalTool
+from openhands.tools.file_editor import FileEditorTool
+from openhands.tools.task_tracker import TaskTrackerTool
+from openhands.tools.browser_use import BrowserUseTool
+from openhands.tools.delegate import DelegateTool
+from openhands.tools.apply_patch import ApplyPatchTool
+from openhands.tools.grep import GrepTool
+from openhands.tools.glob import GlobTool
+```
+
+### openhands-agent-server
+
+Run the server:
+
+```bash
+uv run python -m openhands.agent_server
+# or
+agent-server
+```
+
+See [Agent Server README](https://github.com/OpenHands/software-agent-sdk/tree/main/openhands-agent-server/openhands/agent_server/README.md) for full API documentation.
+
+---
+
+## Need Help?
+
+- **Documentation**: https://docs.openhands.dev/sdk
+- **GitHub Issues**: https://github.com/OpenHands/software-agent-sdk/issues
+- **Slack**: https://openhands.dev/joinslack
+- **Email**: support@openhands.dev
