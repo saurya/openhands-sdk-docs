@@ -1,0 +1,204 @@
+---
+title: Introduction
+description: 'Welcome to the OpenHands Software Agent SDK - Build powerful AI agents that work with code'
+---
+
+<img
+  className="block dark:hidden"
+  src="https://raw.githubusercontent.com/OpenHands/docs/main/openhands/static/img/logo.png"
+  alt="OpenHands Logo"
+  width="200"
+/>
+<img
+  className="hidden dark:block"
+  src="https://raw.githubusercontent.com/OpenHands/docs/main/openhands/static/img/logo.png"
+  alt="OpenHands Logo"
+  width="200"
+/>
+
+## What is OpenHands Software Agent SDK?
+
+The OpenHands Software Agent SDK is a comprehensive set of **Python and REST APIs** for building agents that work with code. It provides a powerful, flexible foundation for creating AI agents that can perform tasks ranging from simple one-off operations to complex multi-agent workflows.
+
+<CardGroup cols={2}>
+  <Card title="Standalone SDK" icon="python" href="/docs/usage#standalone-sdk">
+    Build agents that run locally on your machine with full Python API access
+  </Card>
+  <Card title="Agent Server" icon="server" href="/docs/usage#remote-agent-server">
+    Deploy agents in ephemeral workspaces using Docker or Kubernetes
+  </Card>
+  <Card title="Custom Tools" icon="wrench" href="/docs/usage#custom-tools">
+    Extend agent capabilities with custom tools and integrations
+  </Card>
+  <Card title="Workflows" icon="diagram-project" href="/docs/usage#workflows">
+    Build complex multi-agent workflows for large-scale tasks
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion title="Multiple Workspace Options">
+    Agents can work with local filesystems or run inside isolated ephemeral environments (Docker, Kubernetes) for enhanced security and scalability.
+  </Accordion>
+
+  <Accordion title="Rich Built-in Tools">
+    The SDK comes with powerful built-in tools including:
+    - **File Editor** (`openhands-tools/openhands/tools/file_editor/`) - Advanced file manipulation and editing
+    - **Terminal** (`openhands-tools/openhands/tools/terminal/`) - Execute shell commands
+    - **Task Tracker** (`openhands-tools/openhands/tools/task_tracker/`) - Track and manage agent tasks
+    - **Browser Use** (`openhands-tools/openhands/tools/browser_use/`) - Web browsing capabilities
+    - And many more!
+  </Accordion>
+
+  <Accordion title="Flexible LLM Integration">
+    Built on LiteLLM, supporting multiple LLM providers with advanced features like streaming, function calling, and fallback strategies. See `openhands-sdk/openhands/sdk/llm/` for implementation details.
+  </Accordion>
+
+  <Accordion title="Extensible Architecture">
+    Create custom tools, plugins, and skills. Define specialized sub-agents. Integrate with MCP (Model Context Protocol) servers. The architecture is designed for extensibility at every level.
+  </Accordion>
+
+  <Accordion title="Event-Driven Design">
+    All agent actions and observations are tracked as events, enabling powerful features like persistence, replay, debugging, and observability. See `openhands-sdk/openhands/sdk/event/` for event system.
+  </Accordion>
+
+  <Accordion title="Production-Ready">
+    Security policies, authentication, observability (Laminar integration), async support, error handling, and resource management are all built-in.
+  </Accordion>
+</AccordionGroup>
+
+## Use Cases
+
+The OpenHands SDK is designed for a wide range of code-related tasks:
+
+- **One-off Tasks**: Generate documentation, create boilerplate code, run analyses
+- **Routine Maintenance**: Update dependencies, refactor code, apply patches
+- **Complex Projects**: Multi-step builds, large-scale refactors, cross-repository changes
+- **CI/CD Integration**: Automated workflows in GitHub Actions and other CI systems
+- **Custom Developer Tools**: Build new developer experiences on top of the SDK
+
+## Quick Example
+
+Here's a minimal example to get you started:
+
+```python
+import os
+from openhands.sdk import LLM, Agent, Conversation, Tool
+from openhands.tools.file_editor import FileEditorTool
+from openhands.tools.terminal import TerminalTool
+
+llm = LLM(
+    model="anthropic/claude-sonnet-4-5-20250929",
+    api_key=os.getenv("LLM_API_KEY"),
+)
+
+agent = Agent(
+    llm=llm,
+    tools=[
+        Tool(name=TerminalTool.name),
+        Tool(name=FileEditorTool.name),
+    ],
+)
+
+conversation = Conversation(agent=agent, workspace=os.getcwd())
+conversation.send_message("Write 3 facts about this project into FACTS.txt.")
+conversation.run()
+```
+
+This simple script creates an agent that can read your project, analyze it, and write facts to a file.
+
+## Package Structure
+
+The SDK is organized as a monorepo with four main packages:
+
+<CardGroup cols={2}>
+  <Card title="openhands-sdk" icon="box">
+    **Core SDK Package**
+    
+    Location: `openhands-sdk/`
+    
+    The main package containing agents, conversation management, LLM integration, events, tools, and workspace abstractions.
+  </Card>
+  
+  <Card title="openhands-tools" icon="toolbox">
+    **Built-in Tools**
+    
+    Location: `openhands-tools/`
+    
+    Pre-built tools for file editing, terminal access, task tracking, browser automation, and more.
+  </Card>
+  
+  <Card title="openhands-workspace" icon="folder">
+    **Workspace Management**
+    
+    Location: `openhands-workspace/`
+    
+    Manages different workspace environments including local filesystems and containerized workspaces.
+  </Card>
+  
+  <Card title="openhands-agent-server" icon="server">
+    **Agent Server**
+    
+    Location: `openhands-agent-server/`
+    
+    REST API server for running agents in ephemeral workspaces with WebSocket support for real-time communication.
+  </Card>
+</CardGroup>
+
+## Repository Structure
+
+```
+software-agent-sdk/
+├── openhands-sdk/          # Core SDK package
+│   └── openhands/sdk/
+│       ├── agent/          # Agent implementations
+│       ├── conversation/   # Conversation management
+│       ├── llm/            # LLM integration
+│       ├── event/          # Event system
+│       ├── tool/           # Tool framework
+│       ├── workspace/      # Workspace abstractions
+│       ├── mcp/            # MCP integration
+│       └── ...
+├── openhands-tools/        # Built-in tools
+│   └── openhands/tools/
+│       ├── file_editor/
+│       ├── terminal/
+│       ├── task_tracker/
+│       └── ...
+├── openhands-workspace/    # Workspace management
+├── openhands-agent-server/ # Agent server
+├── examples/               # Usage examples
+│   ├── 01_standalone_sdk/
+│   ├── 02_remote_agent_server/
+│   └── 03_github_workflows/
+└── tests/                  # Test suites
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Setup Guide" icon="download" href="/docs/setup">
+    Install the SDK and set up your development environment
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/docs/architecture">
+    Learn about the SDK's core concepts and architecture
+  </Card>
+  <Card title="Usage Examples" icon="code" href="/docs/usage">
+    Explore practical examples and common patterns
+  </Card>
+  <Card title="API Reference" icon="book" href="/docs/api">
+    Browse the complete API documentation
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+- **Slack**: [Join the OpenHands community](https://openhands.dev/joinslack)
+- **GitHub**: [Source code and issues](https://github.com/OpenHands/software-agent-sdk)
+- **Documentation**: [Official docs](https://docs.openhands.dev/sdk)
+- **Research Paper**: [Tech report on arXiv](https://arxiv.org/abs/2511.03690)
+
+## Benchmark Performance
+
+The OpenHands SDK powers agents that achieve **77.6% on SWEBench**, demonstrating state-of-the-art performance on real-world software engineering tasks.
